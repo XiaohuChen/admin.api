@@ -23,9 +23,14 @@ class OutputController extends Controller
         $list = [];
         foreach($res as $item){
             $phone = '';
+            $name = '';
             $member = DB::table('Members')->where('Id', $item->MemberId)->first();
-            if(!empty($member)) $phone = $member->Phone;
+            if(!empty($member)){
+                $phone = $member->Phone;
+                $name = $member->NickName;
+            }
             $item->Phone = $phone;
+            $item->NickName = $member->NickName;
             $item->Coin = 'USDT';
             $list[] = $item;
         }

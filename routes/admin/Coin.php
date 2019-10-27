@@ -61,6 +61,16 @@ $router->get('/coin/financingMoldList', [
     'as' => 'financingMoldList', 'uses' => 'CoinController@financingMoldList',
 ]);
 
+//批量通过审核
+$router->post('/coin/MultiplePass', [
+    'as' => 'MultiplePass', 'uses' => 'CoinController@MultiplePass',
+]);
+
+//批量驳回
+$router->post('/coin/MultipleReject', [
+    'as' => 'MultipleReject', 'uses' => 'CoinController@MultipleReject',
+]);
+
 
 
 

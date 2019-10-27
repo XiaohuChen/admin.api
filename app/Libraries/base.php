@@ -35,8 +35,7 @@ class base
         $socket->setRecvTimeout(60000);
         $this->transport = new TBufferedTransport($socket, 1024, 1024);
         $protocol        = new TBinaryProtocol($this->transport);
-//        $this->client    = new CoinServiceClient($protocol);
-        $this->IIA       = new \IIAServiceClient($protocol);
+        $this->client    = new CoinServiceClient($protocol);
     }
 
     public function get_class($class)

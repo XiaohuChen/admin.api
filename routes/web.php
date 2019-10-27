@@ -112,4 +112,5 @@ $router->group(['middleware' => 'VerifyToken'], function () use ($router) {
     require 'admin/Plan.php';
     require 'admin/Output.php';
     require 'admin/Invest.php';
+    require 'admin/Kline.php';
 });

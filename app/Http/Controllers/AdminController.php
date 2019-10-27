@@ -20,17 +20,22 @@ class AdminController extends Controller
      */
     public function adminLogList(Request $request)
     {
-        $where      = function ($query) use ($request) {
-            //筛选查询关键字
-            if ($request->has('keywords') and $request->keywords != '') {
-                $key = intval($request->keywords);
-                $query->orWhere('AdminLog.Id', '=', $key)->orWhere('AdminLog.Admin', '=', $request->keywords);
-            }
-        };
-        $count      = intval($request->input('limit')) ? intval($request->input('limit')) : 20;
-        $bannerlist = AdminLogModel::GetPageList($where, $count);
+        $cond = [];
+        if(!empty($request->input('keywords')))
+            $cond['Id'] = intval($request->input('keywords'));
 
-        return self::returnMsg($bannerlist);
+        $uid = $request->get('uid');
+        $data = DB::table('AdminLog')->where('Admin', $uid)->where($cond)->orderBy('Id','desc')->paginate($request->input('limit'));
+        $list = [];
+        foreach($data as $item){
+            $name = '';
+            $admin = DB::table('AdminUser')->where('Id', $item->Admin)->first();
+            if(!empty($admin)) $name = $admin->Name;
+            $item->AdminName = $name;
+            $list[] = $item;
+        }
+        $res = ['data' => $list, 'total' => $data->total()];
+        return self::returnMsg($res);
 
     }
 
@@ -114,29 +119,35 @@ class AdminController extends Controller
 
         $rules = [
             'name'         => 'required',
-            'password'     => 'required|min:6|alpha',
+            'password'     => 'required|min:6',
             'ruleGroup'    => 'required|array',
             'introduction' => 'required',
         ];
-        $v     = Validator::make($request->all(), $rules);
-        if ($v->fails()) return self::returnError(20001, $v->errors());
+        $v = Validator::make($request->all(), $rules,[
+            'name.required' => '请填写名字',
+            'password.required' => '请设置密码',
+            'ruleGroup.required' => '请选择权限组',
+            'introduction.required' => '请填写介绍',
+            'password.min' => '密码最少六位'
+        ]);
+        if ($v->fails()) return self::returnError(20001, $v->errors()->first());
         $sqlmap = $v->validated();
 
         $adminUser = AdminUserModel::GetByName($sqlmap['name']);
         if (isset($adminUser)) self::returnError(20001, '当前管理员名称已存在');
 
-        $new_secret               = (new GoogleAuthenticator())->createSecret();
-        $adminUser->Name          = $sqlmap['name'];
-        $adminUser->Password      = md5($sqlmap['password']);
-        $adminUser->AddTime       = time();
-        $adminUser->RuleGroup     = AdminRuleGroupModel::get_id_by_name($sqlmap['ruleGroup']);
-        $adminUser->Introduction  = $sqlmap['introduction'];
-        $adminUser->CouldNotDel   = 0;
-        $adminUser->IsDel         = 0;
-        $adminUser->google_secret = $new_secret;
-
         try {
-            $result = $adminUser->save();
+            $new_secret = (new GoogleAuthenticator())->createSecret();
+            DB::table('AdminUser')->insert([
+                'Name' => $sqlmap['name'],
+                'Password' => md5($sqlmap['password']),
+                'AddTime' => time(),
+                'RuleGroup' => AdminRuleGroupModel::get_id_by_name($sqlmap['ruleGroup']),
+                'Introduction' => $sqlmap['introduction'],
+                'CouldNotDel' => 0,
+                'IsDel' => 0,
+                'google_secret' => $new_secret
+            ]);
             return self::returnMsg(['Guge' => $new_secret], '操作成功', 20000);
         } catch (Exception $e) {
             return self::returnError(20001, $e->getMessage());
@@ -156,7 +167,7 @@ class AdminController extends Controller
             'introduction' => 'required',
         ];
         $v     = Validator::make($request->all(), $rules);
-        if ($v->fails()) return self::returnError(20001, $v->errors());
+        if ($v->fails()) return self::returnError(20001, $v->errors()->first());
         $sqlmap = $v->validated();
 
         $adminUser = AdminUserModel::GetByName($sqlmap['name']);

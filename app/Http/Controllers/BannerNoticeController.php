@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ArException;
 use App\Models\BannerModel;
 use App\Models\NoticeModel;
 use App\Models\QiniuConfigModel;
@@ -13,6 +14,62 @@ use Illuminate\Support\Facades\Validator;
 
 class BannerNoticeController extends Controller
 {
+
+    /**
+     * 用户协议 修改
+     */
+    public function MemberDocEdit(Request $request){
+        $content = $request->input('content');
+        if(empty($content))
+            throw new ArException(ArException::SELF_ERROR,'请填写内容');
+
+        $data = DB::table('MemberDoc')->first();
+        if(empty($data)){
+            DB::table('MemberDoc')->insert([
+                'MemberDoc' => $content
+            ]);
+        } else {
+            DB::table('MemberDoc')->update(['MemberDoc' => $content]);
+        }
+        return self::returnMsg([], '', 20000);  
+    }
+
+    /**
+     * 用户协议
+     */
+    public function MemberDoc(Request $request){
+        $data = DB::table('MemberDoc')->first();
+        if(empty($data)) return self::returnMsg(['MemberDoc' => ''], '', 20000);
+        return self::returnMsg(['MemberDoc' => $data->MemberDoc], '', 20000); 
+    }
+
+     /**
+     * 关于我们 修改
+     */
+    public function AboutUsEdit(Request $request){
+        $content = $request->input('content');
+        if(empty($content))
+            throw new ArException(ArException::SELF_ERROR,'请填写内容');
+
+        $data = DB::table('MemberDoc')->first();
+        if(empty($data)){
+            DB::table('MemberDoc')->insert([
+                'AboutUs' => $content
+            ]);
+        } else {
+            DB::table('MemberDoc')->update(['AboutUs' => $content]);
+        }
+        return self::returnMsg([], '', 20000);  
+    }
+
+    /**
+     * 关于我们
+     */
+    public function AboutUs(Request $request){
+        $data = DB::table('MemberDoc')->first();
+        if(empty($data)) return self::returnMsg(['AboutUs' => ''], '', 20000);
+        return self::returnMsg(['AboutUs' => $data->AboutUs], '', 20000); 
+    }
 
     /**
      * @func获取Notice列表
@@ -37,6 +94,50 @@ class BannerNoticeController extends Controller
         return self::returnMsg($Noticelist, '', 20000);
     }
 
+    public function NewList(Request $request){
+        $count = intval($request->input('limit')) > 0 ? intval($request->input('limit')) : 20;
+        $data = DB::table('News')->paginate($count);
+        $list = [];
+        foreach($data as $item){
+            $list[] = $item;
+        }
+        $res = ['list' => $list, 'total' => $data->total()];
+        return self::returnMsg($res, '', 20000);
+    }
+
+    public function QaList(Request $request){
+        $count = intval($request->input('limit')) > 0 ? intval($request->input('limit')) : 20;
+        $data = DB::table('CommonQA')->paginate($count);
+        $list = [];
+        foreach($data as $item){
+            $list[] = $item;
+        }
+        $res = ['list' => $list, 'total' => $data->total()];
+        return self::returnMsg($res, '', 20000);
+    }
+
+    public function QaAdd(Request $request){
+        $rules = [
+            'Question'   => 'required',
+            'Answer' => 'required',
+        ];
+        $v = Validator::make($request->all(), $rules,[
+            'Question.required' => '请填写问题',
+            'Answer.required' => '请填写回答'
+        ]);
+        if ($v->fails()) return self::returnError(20001, $v->errors()->first());
+        $sqlmap = $v->validated();
+
+        try {
+            DB::table('CommonQA')->insert([
+                'Question' => $sqlmap['Question'],
+                'Answer' => $sqlmap['Answer']
+            ]);
+            return self::successMsg();
+        } catch (\Exception $exception) {
+            return self::errorMsg($exception->getMessage());
+        }
+    }
 
     /**
      * @func更新Notice
@@ -49,7 +150,7 @@ class BannerNoticeController extends Controller
             'content' => 'required',
         ];
         $v     = Validator::make($request->all(), $rules);
-        if ($v->fails()) return self::returnError(20001, $v->errors());
+        if ($v->fails()) return self::returnError(20001, $v->errors()->first());
         $sqlmap = $v->validated();
 
         $notice          = new NoticeModel();
@@ -67,6 +168,42 @@ class BannerNoticeController extends Controller
 
     }
 
+    //添加快讯
+    public function NewsAdd(Request $request)
+    {
+        $rules = [
+            'title'   => 'required',
+            'content' => 'required',
+        ];
+        $v = Validator::make($request->all(), $rules,[
+            'title.required' => '请填写标题',
+            'content.required' => '请填写内容'
+        ]);
+        if ($v->fails()) return self::returnError(20001, $v->errors()->first());
+        $sqlmap = $v->validated();
+
+        try {
+            DB::table('News')->insert([
+                'Title' => $sqlmap['title'],
+                'Content' => $sqlmap['content'],
+                'AddTime' => time()
+            ]);
+            return self::successMsg();
+        } catch (\Exception $exception) {
+            return self::errorMsg($exception->getMessage());
+        }
+
+    }
+
+    public function QaDelete(Request $request){
+        $id   = (int)$request->input('id');
+        try {
+            DB::table('CommonQA')->where('Id', $id)->delete();
+            return self::successMsg();
+        } catch (\Exception $exception) {
+            return self::errorMsg($exception->getMessage());
+        }
+    }
 
     /**
      * @func更新Notice
@@ -100,6 +237,59 @@ class BannerNoticeController extends Controller
         }
     }
 
+    //更新快讯
+    public function NewsUpdate(Request $request){
+        $rules = [
+            'id'      => 'required|integer',
+            'title'   => 'required',
+            'content' => 'required',
+        ];
+        $v = Validator::make($request->all(), $rules,[
+            'id.required' => '不存在此快讯',
+            'title.required' =>  '请填写标题',
+            'content.required' =>  '请填写内容'
+        ]);
+        if ($v->fails())
+            return self::errorMsg($v->errors()->first());
+        $sqlmap = $v->validated();
+
+        try {
+            DB::table('News')->where('Id', $sqlmap['id'])->update([
+                'Title' => $sqlmap['title'],
+                'Content' => $sqlmap['content']
+            ]);
+            return self::successMsg();
+        } catch (\Exception $exception) {
+            return self::errorMsg($exception->getMessage());
+        }
+    }
+
+    public function QaUpdate(Request $request){
+        $rules = [
+            'id'      => 'required|integer',
+            'Question'   => 'required',
+            'Answer' => 'required',
+        ];
+        $v = Validator::make($request->all(), $rules,[
+            'id.required' => '不存在此快讯',
+            'Question.required' =>  '请填写问题',
+            'Answer.required' =>  '请填写回答'
+        ]);
+        if ($v->fails())
+            return self::errorMsg($v->errors()->first());
+        $sqlmap = $v->validated();
+
+        try {
+            DB::table('CommonQA')->where('Id', $sqlmap['id'])->update([
+                'Question' => $sqlmap['Question'],
+                'Answer' => $sqlmap['Answer']
+            ]);
+            return self::successMsg();
+        } catch (\Exception $exception) {
+            return self::errorMsg($exception->getMessage());
+        }
+    }
+
 
     /** @func删除Notice
      * @param Request $request
@@ -120,6 +310,18 @@ class BannerNoticeController extends Controller
         }
     }
 
+    //删除快讯
+    public function NewsDelete(Request $request){
+        $id   = (int)$request->input('id');
+
+        try {
+            DB::table('News')->where('Id', $id)->delete();
+            return self::successMsg();
+        } catch (\Exception $exception) {
+            return self::errorMsg($exception->getMessage());
+        }
+    }
+
     /**
      * @func根据id查找数据
      */
@@ -127,6 +329,19 @@ class BannerNoticeController extends Controller
     {
         $id   = (int)$request->input('id');
         $data = NoticeModel::get_by_id($id);
+        return self::returnMsg($data);
+    }
+
+    public function GetQA(Request $request){
+        $id   = (int)$request->input('id');
+        $data = DB::table('CommonQA')->where('Id', $id)->first();
+        return self::returnMsg($data);
+    }
+
+    //获取快讯
+    public function GetNews(Request $request){
+        $id   = (int)$request->input('id');
+        $data = DB::table('News')->where('Id', $id)->first();
         return self::returnMsg($data);
     }
 

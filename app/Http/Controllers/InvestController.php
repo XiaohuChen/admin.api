@@ -12,7 +12,8 @@ class InvestController extends Controller
     //产品配置
     public function List(Request $request){
         $cond = [];
-        if(!empty($request->input('State')) && $request->input('State') != -1)
+
+        if($request->input('State') != -1)
             $cond['State'] = intval($request->input('State'));
         $data = DB::table('MemberProducts')->where($cond);
         if(!empty($request->input('PlanDate'))){
@@ -35,9 +36,14 @@ class InvestController extends Controller
         $list = [];
         foreach($res as $item){
             $phone = '';
+            $name = '';
             $member = DB::table('Members')->where('Id', $item->MemberId)->first();
-            if(!empty($member)) $phone = $member->Phone;
+            if(!empty($member)){ 
+                $phone = $member->Phone;
+                $name = $member->NickName;
+            }
             $item->Phone = $phone;
+            $item->NickName = $member->NickName;
             //
             $passUser = '系统';
             $admin = DB::table('AdminUser')->where('Id', $item->PassAdminUser)->first();

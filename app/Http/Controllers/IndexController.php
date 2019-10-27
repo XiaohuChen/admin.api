@@ -16,6 +16,50 @@ class IndexController extends Controller
 
     public function Statis(Request $request){
         $data = [];
+        $today = strtotime(date('Y-m-d'));
+        //今日预约
+        $plan = DB::table('MemberProducts')->where('AddTime', '>', $today)->where('State', 0)->sum('Number');
+        //今日放行
+        $pass = DB::table('MemberProducts')->where('AddTime', '>', $today)->where('State', 3)->sum('Number');
+        //今日报单
+        $pay = DB::table('MemberProducts')->where('AddTime', '>', $today)->where('State', 1)->sum('Number');
+        //今日产出
+        $sum = DB::table('RewardRecord')->where('AddTime','>', $today)->where('Number','>',0)->sum('Number');
+        $data['Today'] = [
+            'Plan' => $plan,
+            'Pass' => $pass,
+            'Pay' => $pay,
+            'Sum' => $sum
+        ];
+        $yesterday = $today - 86400;
+        //昨日预约
+        $plan = DB::table('MemberProducts')->whereBetween('AddTime', [$yesterday, $today])->where('State', 0)->sum('Number');
+        //昨日放行
+        $pass = DB::table('MemberProducts')->whereBetween('AddTime', [$yesterday, $today])->where('State', 3)->sum('Number');
+        //昨日报单
+        $pay = DB::table('MemberProducts')->whereBetween('AddTime', [$yesterday, $today])->where('State', 1)->sum('Number');
+        //昨日产出
+        $sum = DB::table('RewardRecord')->whereBetween('AddTime', [$yesterday, $today])->where('Number','>',0)->sum('Number');
+        $data['Yesterday'] = [
+            'Plan' => $plan,
+            'Pass' => $pass,
+            'Pay' => $pay,
+            'Sum' => $sum
+        ];
+        //总产出
+        $plan = DB::table('MemberProducts')->where('State', 0)->sum('Number');
+        //总放行
+        $pass = DB::table('MemberProducts')->where('State', 3)->sum('Number');
+        //总报单
+        $pay = DB::table('MemberProducts')->where('State', 1)->sum('Number');
+        //总产出
+        $sum = DB::table('RewardRecord')->where('Number','>',0)->sum('Number');
+        $data['All'] = [
+            'Plan' => $plan,
+            'Pass' => $pass,
+            'Pay' => $pay,
+            'Sum' => $sum
+        ];
         return self::returnMsg($data);
     }
 

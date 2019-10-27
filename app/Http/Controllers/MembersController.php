@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Libraries\base;
-use App\Models\AdminRuleGroupModel;
 use App\Models\CoinModel;
 use App\Models\FinancingListModel;
-use App\Models\MembersModel;
 use App\Models\MembersModel as Members;
 
 use Illuminate\Support\Facades\DB;
@@ -16,6 +14,51 @@ use Illuminate\Support\Facades\Validator;
 
 class MembersController extends Controller
 {
+    //实名认证通过
+    public function AuthPass(Request $request){
+        $id = intval($request->input('Id'));
+        DB::table('Members')->where('Id', $id)->update([
+            'AuthState' => 2,
+            'HandleAuthTime' => time()
+        ]);
+        return self::returnMsg([], '', 20000);
+    }
+    
+    //实名认证驳回
+    public function AuthReject(Request $request){
+        $id = intval($request->input('Id'));
+        DB::table('Members')->where('Id', $id)->update([
+            'AuthState' => 3,
+            'HandleAuthTime' => time()
+        ]);
+        return self::returnMsg([], '', 20000);
+    }
+
+    //实名认证列表
+    public function AuthList(Request $request){
+        $data = DB::table('Members')->where('AuthState','<>', 0)->paginate($request->input('limit'));
+        $list = [];
+        $domain = '';
+        $qiniu = DB::table('QiniuConfig')->first();
+        if(!empty($qiniu)) $domain = $qiniu->Domain;
+        foreach($data as $item){
+            $ParentPhone = '';
+            $member = DB::table('Members')->where('Id', $item->ParentId)->first();
+            if(!empty($member))
+               $ParentPhone = $member->Phone;
+            $imgs = json_decode($item->IdCardImg, true);
+            $tmp = [];
+            foreach($imgs as $img){
+                $tmp[] = $domain.'/'.$img;
+            }
+            $item->IdCardImg = $tmp;
+            
+            $item->ParentPhone = $ParentPhone;
+            $list[] = $item;
+        }
+        $res = ['list' => $list, 'total' => $data->total()];
+        return self::returnMsg($res, '', 20000);
+    }
 
     /**
      * Notes:修改用户交易备注码
@@ -48,16 +91,19 @@ class MembersController extends Controller
         if (!isset($coin))
             return self::errorMsg('未找到该币种信息');
 
-        $memberCoin = MemberCoin::get_by_memberId_coinId($sqlmap['MemberId'], $sqlmap['CoinId']);
-        if (isset($memberCoin))
+        $memberCoin = DB::table('MemberCoin')
+        ->where('MemberId', $sqlmap['MemberId'])
+        ->where('CoinId', $sqlmap['CoinId'])
+        ->first();
+        if (!empty($memberCoin))
             return self::errorMsg('该用户已经拥有该币种的钱包信息了');
 
-        $memberCoin->CoinId   = $sqlmap['CoinId'];
-        $memberCoin->CoinName = $coin->EnName;
-        $memberCoin->MemberId = $sqlmap['MemberId'];
-
         try {
-            $memberCoin->save();
+            DB::table('MemberCoin')->insert([
+                'CoinId' => $sqlmap['CoinId'],
+                'CoinName' => $coin->EnName,
+                'MemberId' => $sqlmap['MemberId']
+            ]);
             return self::successMsg();
         } catch (\Exception $exception) {
             return self::errorMsg($exception->getMessage());
@@ -73,7 +119,7 @@ class MembersController extends Controller
             //筛选查询关键字
             if ($request->has('keywords') and $request->keywords != '') {
                 $keywords = "%" . $request->keywords . "%";
-                $query->orWhere('Members.Nick', 'like', $keywords)->orWhere('Members.Id', 'like', $keywords)
+                $query->orWhere('Members.NickName', 'like', $keywords)->orWhere('Members.Id', 'like', $keywords)
                     ->orWhere('Members.Phone', 'like', $keywords);
             }
             if ($request->has('IsBan') and $request->IsBan != '' and $request->IsBan < 100) {
@@ -148,7 +194,7 @@ class MembersController extends Controller
             return $res;
         } else {
             $memberCoin_arr->Money = bcadd($memberCoin_arr->Money, $sqlmap['money'], 10);
-            $mold                  = FinancingListModel::get_mold_by_call_index('admin_member_coin_update');
+            $mold = FinancingListModel::get_mold_by_call_index('admin_member_coin_update');
             if ($memberCoin_arr->Money < 0)
                 return self::errorMsg('用户余额不足');
 
@@ -278,33 +324,17 @@ class MembersController extends Controller
      */
     public function membersStatus(Request $request)
     {
-        $type       = (int)$request->input('type');
-        $id         = (int)($request->input('id'));
-        $member_arr = Members::GetBId($id);
-        if (!$member_arr) {
-            return self::returnMsg([], '对不起，没有找到用户', 20001);
-        }
-        if ($type > 0) {
-            //冻结用户，不能提现
-            if ($member_arr['IsFreeze'] > 0) {
-                $result = Members::where(['Id' => $id])->update(['IsFreeze' => 0]);
-            } else {
-                $result = Members::where(['Id' => $id])->update(['IsFreeze' => 1]);
-            }
-        } else {
-            //锁定用户
-            if ($member_arr['Status'] > 0) {
-                $result = Members::where(['Id' => $id])->update(['Status' => 0]);
-            } else {
-                $result = Members::where(['Id' => $id])->update(['Status' => 1]);
-            }
-        }
+        $id = (int)($request->input('id'));
+        $member = Members::find($id);
+        if (!$member) 
+            return self::returnMsg([], '未找到此用户', 20001);
 
-        if ($result) {
+        $result = Members::where(['Id' => $id])->update(['IsBan' => intval(!$member->IsBan)]);
+
+        if ($result) 
             return self::returnMsg([], '操作成功', 20000);
-        } else {
-            return self::returnMsg([], '操作失败', 20011);
-        }
+
+        return self::returnMsg([], '操作失败', 20011);
     }
 
 

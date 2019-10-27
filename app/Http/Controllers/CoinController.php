@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ArException;
 use App\Models\CoinModel;
 use App\Models\wv_FinancingListModel;
 use Illuminate\Http\Request;
@@ -11,6 +12,78 @@ use Illuminate\Support\Facades\Redis;
 class CoinController extends Controller
 {
 
+    //批量通过
+    public function MultipleReject(Request $request){
+        $ids = $request->input('Ids');
+        $remark = $request->input('Remark');
+        if(empty($remark))
+            throw new ArException(ArException::SELF_ERROR,'请填写驳回理由');
+
+        if(!is_array($ids))
+            throw new ArException(ArException::PARAM_ERROR);
+
+        DB::beginTransaction();
+        try{
+            $record = DB::table('Withdraw')->whereIn('Id', $ids)->where('Status', 0)->get();
+            foreach($record as $item){
+                DB::table('MemberCoin')
+                    ->where('MemberId', $item->MemberId)
+                    ->where('CoinId', $item->CoinId)
+                    ->update([
+                        'Forzen' => DB::raw("Forzen - {$item->Money}"),
+                        'Money' => DB::raw("Money+{$item->Money}")
+                    ]);
+            }
+            $res = DB::table('Withdraw')
+                ->where('Status', 0)
+                ->whereIn('Id', $ids)
+                ->update([
+                    'Remark' => $remark,
+                    'Status' => -1
+                ]);
+            if(!$res)
+                throw new ArException(ArException::SELF_ERROR,'更新失败，请稍后再试');
+            DB::commit();
+        } catch(\Exception $e){
+            DB::rollBack();
+            throw new ArException(ArException::SELF_ERROR, $e->getMessage());
+        }
+        return self::returnMsg();
+    }
+
+    //批量通过
+    public function MultiplePass(Request $request){
+        $ids = $request->input('Ids');
+        $hash = $request->input('Hash');
+        if(empty($hash))
+            throw new ArException(ArException::SELF_ERROR,'请填写Hash');
+        if(!is_array($ids))
+            throw new ArException(ArException::PARAM_ERROR);
+        DB::beginTransaction();
+        try{
+            $record = DB::table('Withdraw')->whereIn('Id', $ids)->where('Status', 0)->get();
+            foreach($record as $item){
+                DB::table('MemberCoin')
+                    ->where('MemberId', $item->MemberId)
+                    ->where('CoinId', $item->CoinId)
+                    ->decrement('Forzen', $item->Money);
+            }
+            $res = DB::table('Withdraw')
+                ->where('Status', 0)
+                ->whereIn('Id', $ids)
+                ->update([
+                    'Hash' => $hash,
+                    'Status' => 2
+                ]);
+            if(!$res)
+                throw new ArException(ArException::SELF_ERROR,'更新失败，请稍后再试');
+            DB::commit();
+        } catch(\Exception $e){
+            DB::rollBack();
+            throw new ArException(ArException::SELF_ERROR, $e->getMessage());
+        }
+        return self::returnMsg();
+    }
 
     /**
      * Notes:获取币种列表，用于展示或选择币种
@@ -70,6 +143,10 @@ class CoinController extends Controller
         if (!$data_field['status']) {
             return self::returnMsg([], $data_field['data'], 20002);
         }
+        $domain = '';
+        $qiniu = DB::table('QiniuConfig')->first();
+        if(!empty($qiniu)) $domain = $qiniu->Domain;
+        $data_field['data']['Logo'] = $domain.'/'.$data_field['data']['Logo'];
         $result = CoinModel::insert($data_field['data']);
         if ($result) {
             self::redisFlushAll();
@@ -96,6 +173,10 @@ class CoinController extends Controller
         if (!isset($coin))
             return self::errorMsg('未找到该币种');
         try {
+            $domain = '';
+            $qiniu = DB::table('QiniuConfig')->first();
+            if(!empty($qiniu)) $domain = $qiniu->Domain;
+            $data_field['data']['Logo'] = $domain.'/'.$data_field['data']['Logo'];
             //$coin->update($data_field['data']);
             if (CoinModel::where('Id', $id)->update($data_field['data'])) {
                 self::redisFlushAll();

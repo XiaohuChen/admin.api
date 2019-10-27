@@ -57,7 +57,7 @@ class QiniuController extends Controller
         } else {
             return ['status' => false, 'data' => '图片类型错误'];
         }
-        $result = $this->request_by_curl('http://up-z2.qiniup.com/putb64/-1', $base64_str, $upToken);
+        $result = $this->request_by_curl('https://up-z2.qiniup.com/putb64/-1', $base64_str, $upToken);
 //        $result = $this->request_by_curl('http://upload.qiniu.com',$base64_str,$upToken);
         $Qiniu_result = json_decode($result, true);
         if (isset($Qiniu_result['key'])) {

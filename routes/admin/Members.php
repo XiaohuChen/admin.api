@@ -62,3 +62,18 @@ $router->get('/members/addCoin', [
 $router->post('/members/memberRemark', [
     'as' => 'memberRemark', 'uses' => 'MembersController@memberRemark',
 ]);
+
+//实名认证列表
+$router->post('/auth/list', [
+    'as' => 'memberAuthList', 'uses' => 'MembersController@AuthList',
+]);
+
+//实名认证通过
+$router->post('/auth/pass', [
+    'as' => 'memberAuthPass', 'uses' => 'MembersController@AuthPass',
+]);
+
+//实名认证驳回
+$router->post('/auth/reject', [
+    'as' => 'memberAuthReject', 'uses' => 'MembersController@AuthReject',
+]);
